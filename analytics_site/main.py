@@ -74,8 +74,7 @@ async def get_tracker_js():
     file_path = os.path.join(os.path.dirname(__file__), "static", "wa.js")
     return FileResponse(file_path, media_type="application/javascript")
 
-from urllib.parse import urlparse
-from collections import defaultdict
+from urllib.parse import urlparse, parse_qs
 
 def normalize_url(url: str) -> str:
     try:
@@ -93,6 +92,21 @@ def normalize_url(url: str) -> str:
         return "Unknown"
 
 def normalize_referrer(referrer: str, current_url: str) -> str:
+    # 1. Check UTM parameters in current_url first (Highest Priority)
+    try:
+        parsed_curr = urlparse(current_url)
+        query_params = parse_qs(parsed_curr.query)
+        if 'utm_source' in query_params:
+            source = query_params['utm_source'][0].lower()
+            # Map common utm values to readable names
+            if source == 'wechat': return 'WeChat'
+            if source == 'dingtalk': return 'DingTalk'
+            if source == 'google': return 'Google Search'
+            return f"{source.capitalize()} (UTM)"
+    except:
+        pass
+
+    # 2. Check Referrer
     if not referrer:
         return "Direct Entry"
     try:
@@ -110,6 +124,7 @@ def normalize_referrer(referrer: str, current_url: str) -> str:
         if "facebook" in parsed_ref.netloc: return "Facebook"
         if "baidu" in parsed_ref.netloc: return "Baidu"
         if "dingtalk" in parsed_ref.netloc: return "DingTalk"
+        if "weixin" in parsed_ref.netloc or "wechat" in parsed_ref.netloc: return "WeChat"
         
         return parsed_ref.netloc # Fallback to domain
     except Exception as e:
