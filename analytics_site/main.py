@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
+from collections import defaultdict # <--- Re-added this!
 
 from schemas import EventPayload, EventResponse
 from database import engine, Base, get_db
