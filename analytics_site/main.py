@@ -169,6 +169,20 @@ async def get_sankey_data(db: Session = Depends(get_db)):
     
     return {"nodes": echarts_nodes, "links": echarts_links}
 
+@app.delete("/api/analytics/clear")
+async def clear_data(db: Session = Depends(get_db)):
+    """
+    Clears all analytics data from the database.
+    WARNING: This action is irreversible.
+    """
+    try:
+        db.query(Event).delete()
+        db.commit()
+        return {"status": "success", "message": "All data cleared"}
+    except Exception as e:
+        db.rollback()
+        return {"status": "error", "message": str(e)}
+
 @app.get("/", response_class=HTMLResponse)
 async def root(db: Session = Depends(get_db)):
     events = db.query(Event).order_by(desc(Event.timestamp)).limit(50).all()
@@ -206,14 +220,17 @@ async def root(db: Session = Depends(get_db)):
                 th {{ background-color: #f8f9fa; color: #495057; font-weight: 600; }}
                 tr:nth-child(even) {{ background-color: #f8f9fa; }}
                 tr:hover {{ background-color: #f2f2f2; }}
-                .refresh-btn {{ float: right; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }}
+                .refresh-btn {{ float: right; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; margin-left: 10px; }}
                 .refresh-btn:hover {{ background: #218838; }}
+                .clear-btn {{ float: right; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }}
+                .clear-btn:hover {{ background: #c82333; }}
                 #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
             </style>
         </head>
         <body>
             <div class="container">
                 <a href="/" class="refresh-btn">Refresh Data</a>
+                <button onclick="clearData()" class="clear-btn">Clear All Data</button>
                 <h1>Web Analytics Dashboard</h1>
                 
                 <div class="metric-card">
@@ -287,6 +304,17 @@ async def root(db: Session = Depends(get_db)):
                             }});
                         }});
                 }}, 30000);
+
+                function clearData() {{
+                    if(confirm("Are you sure you want to DELETE ALL analytics data? This cannot be undone.")) {{
+                        fetch('/api/analytics/clear', {{ method: 'DELETE' }})
+                            .then(response => response.json())
+                            .then(data => {{
+                                alert(data.message);
+                                location.reload();
+                            }});
+                    }}
+                }}
             </script>
         </body>
     </html>
