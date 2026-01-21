@@ -176,19 +176,25 @@ async def get_sankey_data(db: Session = Depends(get_db)):
             
             # Layer 1: Step 1 -> Step 2
             if len(urls) >= 2:
+                # Add (Step X) suffix to ensure unique nodes per layer and prevent cycles
                 source = f"{urls[0]} (Step 1)"
                 target = f"{urls[1]} (Step 2)"
-                links_count[(source, target)] += 1
-                nodes.add(source)
-                nodes.add(target)
+                
+                # Prevent self-loops just in case
+                if source != target:
+                    links_count[(source, target)] += 1
+                    nodes.add(source)
+                    nodes.add(target)
                 
                 # Layer 2: Step 2 -> Step 3
                 if len(urls) >= 3:
                     source_2 = f"{urls[1]} (Step 2)"
                     target_2 = f"{urls[2]} (Step 3)"
-                    links_count[(source_2, target_2)] += 1
-                    nodes.add(source_2)
-                    nodes.add(target_2)
+                    
+                    if source_2 != target_2:
+                        links_count[(source_2, target_2)] += 1
+                        nodes.add(source_2)
+                        nodes.add(target_2)
 
         # Format for ECharts
         echarts_nodes = [{"name": name} for name in nodes]
