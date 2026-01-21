@@ -225,6 +225,81 @@ async def clear_data(db: Session = Depends(get_db)):
         db.rollback()
         return {"status": "error", "message": str(e)}
 
+@app.get("/api/analytics/stats")
+async def get_analytics_stats(db: Session = Depends(get_db)):
+    try:
+        # Time range: Last 24 hours (for simplicity)
+        # In a real app, accept start_date/end_date query params
+        now = datetime.utcnow()
+        # limit to recent data for performance
+        events = db.query(Event).order_by(desc(Event.timestamp)).limit(5000).all()
+        
+        # 1. User & Session Metrics
+        total_users = len(set(e.visitor_id for e in events))
+        total_sessions = len(set(e.session_id for e in events))
+        
+        # 2. Page Views & Engagement
+        page_views = len([e for e in events if e.event_type == 'pageview'])
+        
+        # Calculate Average Engagement Time
+        engagement_events = [e for e in events if e.event_type == 'user_engagement']
+        total_duration = sum(int(e.data.get('duration_seconds', 0)) for e in engagement_events if e.data)
+        avg_engagement_time = round(total_duration / total_sessions, 1) if total_sessions > 0 else 0
+        
+        # 3. Top Sources (Acquisition)
+        sources = defaultdict(int)
+        for e in events:
+            if e.event_type == 'pageview':
+                # Prefer UTM source, then Referrer source
+                utm_source = e.data.get('source') if e.data else None
+                if utm_source:
+                    src = f"{utm_source} (UTM)"
+                else:
+                    # Re-use our normalize logic
+                    # In a real DB, we should store normalized source in a column
+                    raw_url = e.url if e.url else ""
+                    raw_ref = e.referrer if e.referrer else ""
+                    raw_ua = e.user_agent if e.user_agent else ""
+                    src = normalize_referrer(raw_ref, raw_url, raw_ua)
+                
+                sources[src] += 1
+        
+        top_sources = sorted(sources.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # 4. Top Pages
+        pages = defaultdict(int)
+        for e in events:
+            if e.event_type == 'pageview':
+                path = normalize_url(e.url if e.url else "")
+                pages[path] += 1
+        
+        top_pages = sorted(pages.items(), key=lambda x: x[1], reverse=True)[:5]
+        
+        # 5. Device Breakdown
+        devices = defaultdict(int)
+        for e in events:
+            if e.event_type == 'pageview':
+                ua = (e.user_agent or "").lower()
+                if "mobile" in ua or "android" in ua or "iphone" in ua:
+                    dev = "Mobile"
+                else:
+                    dev = "Desktop"
+                devices[dev] += 1
+        
+        return {
+            "users": total_users,
+            "sessions": total_sessions,
+            "page_views": page_views,
+            "avg_engagement_time": avg_engagement_time,
+            "top_sources": [{"name": k, "value": v} for k, v in top_sources],
+            "top_pages": [{"name": k, "value": v} for k, v in top_pages],
+            "devices": [{"name": k, "value": v} for k, v in devices.items()]
+        }
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}
+
 @app.get("/", response_class=HTMLResponse)
 async def root(db: Session = Depends(get_db)):
     events = db.query(Event).order_by(desc(Event.timestamp)).limit(50).all()
