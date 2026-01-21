@@ -62,7 +62,7 @@ async def track_event(
     db.refresh(db_event)
     
     # Normalize referrer for logging
-    source = normalize_referrer(payload.referrer, payload.url)
+    source = normalize_referrer(payload.referrer, payload.url, payload.user_agent)
     print(f"Saved event: {payload.event_type} on {payload.url} (Source: {source}) (ID: {db_event.id})")
     
     # Log Headers (excluding sensitive ones)
@@ -96,14 +96,13 @@ def normalize_url(url: str) -> str:
     except:
         return "Unknown"
 
-def normalize_referrer(referrer: str, current_url: str) -> str:
+def normalize_referrer(referrer: str, current_url: str, user_agent: str = "") -> str:
     # 1. Check UTM parameters in current_url first (Highest Priority)
     try:
         parsed_curr = urlparse(current_url)
         query_params = parse_qs(parsed_curr.query)
         if 'utm_source' in query_params:
             source = query_params['utm_source'][0].lower()
-            # Map common utm values to readable names
             if source == 'wechat': return 'WeChat'
             if source == 'dingtalk': return 'DingTalk'
             if source == 'google': return 'Google Search'
@@ -111,7 +110,15 @@ def normalize_referrer(referrer: str, current_url: str) -> str:
     except:
         pass
 
-    # 2. Check Referrer
+    # 2. Check User Agent (Secondary Priority)
+    if user_agent:
+        ua = user_agent.lower()
+        if "micromessenger" in ua: return "WeChat"
+        if "dingtalk" in ua: return "DingTalk"
+        if "qq/" in ua: return "QQ"
+        if "weibo" in ua: return "Weibo"
+
+    # 3. Check Referrer
     if not referrer:
         return "Direct Entry"
     try:
@@ -155,7 +162,8 @@ async def get_sankey_data(db: Session = Depends(get_db)):
                 # 2. Capture Referrer (handle None)
                 if event.session_id not in session_referrers:
                     raw_ref = event.referrer if event.referrer else ""
-                    session_referrers[event.session_id] = normalize_referrer(raw_ref, raw_url)
+                    raw_ua = event.user_agent if event.user_agent else ""
+                    session_referrers[event.session_id] = normalize_referrer(raw_ref, raw_url, raw_ua)
             except Exception as inner_e:
                 print(f"Skipping event {event.id}: {inner_e}")
                 continue
