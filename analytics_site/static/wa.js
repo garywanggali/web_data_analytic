@@ -72,12 +72,39 @@
     if (!visitorId) {
         visitorId = generateUUID();
         Storage.set('wa_visitor_id', visitorId);
+        // Mark as new user in session storage for this session
+        sessionStorage.setItem('wa_is_new_user', 'true');
     }
 
-    let sessionId = sessionStorage.getItem('wa_session_id');
-    if (!sessionId) {
+    // Session Management (30 mins timeout)
+    const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+    let sessionId = Storage.get('wa_session_id');
+    let lastActivity = Storage.get('wa_last_activity');
+    const now = Date.now();
+
+    if (!sessionId || !lastActivity || (now - lastActivity > SESSION_TIMEOUT)) {
         sessionId = generateUUID();
-        sessionStorage.setItem('wa_session_id', sessionId);
+        Storage.set('wa_session_id', sessionId);
+        sessionStorage.setItem('wa_session_start', 'true'); // Mark session start
+    }
+    Storage.set('wa_last_activity', now);
+
+    // Parse UTM Parameters
+    function getUTMParams() {
+        const params = new URLSearchParams(window.location.search);
+        const utm = {};
+        ['source', 'medium', 'campaign', 'term', 'content'].forEach(key => {
+            if (params.has(`utm_${key}`)) {
+                utm[key] = params.get(`utm_${key}`);
+            }
+        });
+        return utm;
+    }
+    
+    // Store UTMs in session if present (First Touch attribution model for session)
+    const currentUTMs = getUTMParams();
+    if (Object.keys(currentUTMs).length > 0) {
+        sessionStorage.setItem('wa_utm_params', JSON.stringify(currentUTMs));
     }
 
     // Main Tracker Class
@@ -85,9 +112,68 @@
         constructor() {
             this.queue = [];
             this.isProcessing = false;
+            this.startTime = Date.now();
+            this.setupListeners();
+        }
+
+        setupListeners() {
+            // 1. Scroll Tracking
+            let maxScroll = 0;
+            let scrollTimer;
+            window.addEventListener('scroll', () => {
+                if (scrollTimer) clearTimeout(scrollTimer);
+                scrollTimer = setTimeout(() => {
+                    const scrollPercent = Math.round((window.scrollY + window.innerHeight) / document.documentElement.scrollHeight * 100);
+                    if (scrollPercent > maxScroll) {
+                        maxScroll = scrollPercent;
+                        if (maxScroll >= 90 && !this.scrolled90) {
+                            this.track('scroll', { depth: 90 });
+                            this.scrolled90 = true;
+                        }
+                    }
+                }, 500);
+            });
+
+            // 2. Engagement Time (on unload or hide)
+            const handleUnload = () => {
+                const duration = Math.round((Date.now() - this.startTime) / 1000);
+                if (duration > 0) {
+                    this.track('user_engagement', { duration_seconds: duration });
+                }
+            };
+            window.addEventListener('beforeunload', handleUnload);
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden') handleUnload();
+            });
+            
+            // 3. Click Tracking (External Links & Download)
+            document.addEventListener('click', (e) => {
+                const link = e.target.closest('a');
+                if (link) {
+                    const href = link.href;
+                    if (href && !href.startsWith(window.location.origin)) {
+                        this.track('click', { type: 'outbound', link_url: href });
+                    }
+                }
+            });
         }
 
         track(eventType, customData = {}) {
+            // Update last activity
+            Storage.set('wa_last_activity', Date.now());
+            
+            // Merge UTMs
+            const storedUTMs = JSON.parse(sessionStorage.getItem('wa_utm_params') || '{}');
+            const mergedData = { ...storedUTMs, ...customData };
+            
+            // Add performance metrics for pageview
+            if (eventType === 'pageview' && window.performance) {
+                const timing = performance.getEntriesByType('navigation')[0];
+                if (timing) {
+                    mergedData.load_time_ms = Math.round(timing.loadEventEnd - timing.startTime);
+                }
+            }
+
             const payload = {
                 event_type: eventType,
                 url: window.location.href,
@@ -99,7 +185,7 @@
                 screen_height: window.screen.height,
                 language: navigator.language,
                 user_agent: navigator.userAgent,
-                data: customData
+                data: mergedData
             };
 
             this.send(payload);
@@ -107,7 +193,7 @@
 
         send(payload) {
             // Use sendBeacon if available for better reliability on unload
-            if (navigator.sendBeacon && payload.event_type === 'pageview_unload') {
+            if (navigator.sendBeacon && (payload.event_type === 'user_engagement' || payload.event_type === 'pageview_unload')) {
                 const blob = new Blob([JSON.stringify(payload)], { type: 'application/json' });
                 navigator.sendBeacon(ENDPOINT, blob);
             } else {
