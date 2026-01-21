@@ -65,6 +65,10 @@ async def track_event(
     source = normalize_referrer(payload.referrer, payload.url)
     print(f"Saved event: {payload.event_type} on {payload.url} (Source: {source}) (ID: {db_event.id})")
     
+    # Log Headers (excluding sensitive ones)
+    headers = dict(request.headers)
+    print(f"Request Headers: {headers}")
+    
     return EventResponse(received_at=datetime.utcnow())
 
 @app.get("/wa.js")
