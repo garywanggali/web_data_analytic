@@ -107,9 +107,11 @@ def normalize_referrer(referrer: str, current_url: str) -> str:
         if "twitter" in parsed_ref.netloc or "t.co" in parsed_ref.netloc: return "Twitter"
         if "facebook" in parsed_ref.netloc: return "Facebook"
         if "baidu" in parsed_ref.netloc: return "Baidu"
+        if "dingtalk" in parsed_ref.netloc: return "DingTalk"
         
         return parsed_ref.netloc # Fallback to domain
-    except:
+    except Exception as e:
+        print(f"Error normalizing referrer: {e}, referrer: {referrer}")
         return "Unknown"
 
 @app.get("/api/analytics/sankey")
