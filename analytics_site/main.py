@@ -60,7 +60,9 @@ async def track_event(
     db.commit()
     db.refresh(db_event)
     
-    print(f"Saved event: {payload.event_type} on {payload.url} (ID: {db_event.id})")
+    # Normalize referrer for logging
+    source = normalize_referrer(payload.referrer, payload.url)
+    print(f"Saved event: {payload.event_type} on {payload.url} (Source: {source}) (ID: {db_event.id})")
     
     return EventResponse(received_at=datetime.utcnow())
 
