@@ -40,8 +40,8 @@
     // I will update the endpoint to be protocol-relative or specific if provided.
     
     // For production deployment on 110.40.153.38
-    // We point to the analytics server running on port 8001 on the same host
-    const ENDPOINT = 'http://110.40.153.38:8001/api/track'; 
+    // We point to the analytics server running on port 5270 on the same host
+    const ENDPOINT = 'http://110.40.153.38:5270/api/track'; 
     // WARNING: This still points to localhost. If the website is on 110.40..., users visiting it 
     // won't be able to send data to your localhost unless you use a tunnel.
     

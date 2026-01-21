@@ -15,6 +15,6 @@ else
     source .venv/bin/activate
 fi
 
-echo "Starting Analytics Server on http://0.0.0.0:8001"
-uvicorn main:app --host 0.0.0.0 --port 8001
+echo "Starting Analytics Server on http://0.0.0.0:5270"
+uvicorn main:app --host 0.0.0.0 --port 5270
 
