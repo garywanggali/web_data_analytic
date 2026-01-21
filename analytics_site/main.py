@@ -202,7 +202,9 @@ async def get_sankey_data(db: Session = Depends(get_db)):
         
         return {"nodes": echarts_nodes, "links": echarts_links}
     except Exception as e:
-        print(f"Error generating sankey data: {e}")
+        import traceback
+        traceback.print_exc() # Print full stack trace to logs
+        print(f"CRITICAL Error generating sankey data: {e}")
         return {"nodes": [], "links": []}
 
 @app.delete("/api/analytics/clear")
