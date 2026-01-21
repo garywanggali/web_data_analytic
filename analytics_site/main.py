@@ -133,60 +133,71 @@ def normalize_referrer(referrer: str, current_url: str) -> str:
 
 @app.get("/api/analytics/sankey")
 async def get_sankey_data(db: Session = Depends(get_db)):
-    # Get pageviews from last 24 hours (or limit to last 2000 events for performance)
-    events = db.query(Event).filter(Event.event_type == 'pageview').order_by(Event.timestamp).limit(2000).all()
-    
-    # Group by session
-    sessions = defaultdict(list)
-    session_referrers = {} # Store the first referrer of the session
-    
-    for event in events:
-        sessions[event.session_id].append(normalize_url(event.url))
+    try:
+        # Get pageviews from last 24 hours (or limit to last 2000 events for performance)
+        events = db.query(Event).filter(Event.event_type == 'pageview').order_by(Event.timestamp).limit(2000).all()
         
-        # Capture the referrer of the *first* event in the session
-        if event.session_id not in session_referrers:
-            session_referrers[event.session_id] = normalize_referrer(event.referrer, event.url)
+        # Group by session
+        sessions = defaultdict(list)
+        session_referrers = {} # Store the first referrer of the session
+        
+        for event in events:
+            try:
+                sessions[event.session_id].append(normalize_url(event.url))
+                
+                # Capture the referrer of the *first* event in the session
+                if event.session_id not in session_referrers:
+                    # Defensive check: ensure url is not None
+                    url = event.url if event.url else ""
+                    referrer = event.referrer if event.referrer else ""
+                    session_referrers[event.session_id] = normalize_referrer(referrer, url)
+            except Exception as e:
+                print(f"Skipping malformed event {event.id}: {e}")
+                continue
 
-    # Build flows
-    # Layer 0: Referrer -> Step 1
-    # Layer 1: Step 1 -> Step 2
-    # Layer 2: Step 2 -> Step 3
-    links_count = defaultdict(int)
-    nodes = set()
-    
-    for session_id, urls in sessions.items():
-        if not urls: continue
-        
-        # Layer 0: Referrer -> First Page
-        referrer = session_referrers.get(session_id, "Direct Entry")
-        if referrer != "Internal": # Only map external/direct sources as start
-            source_ref = f"{referrer} (Source)"
-            target_1 = f"{urls[0]} (Step 1)"
-            links_count[(source_ref, target_1)] += 1
-            nodes.add(source_ref)
-            nodes.add(target_1)
-        
+        # Build flows
+        # Layer 0: Referrer -> Step 1
         # Layer 1: Step 1 -> Step 2
-        if len(urls) >= 2:
-            source = f"{urls[0]} (Step 1)"
-            target = f"{urls[1]} (Step 2)"
-            links_count[(source, target)] += 1
-            nodes.add(source)
-            nodes.add(target)
+        # Layer 2: Step 2 -> Step 3
+        links_count = defaultdict(int)
+        nodes = set()
+        
+        for session_id, urls in sessions.items():
+            if not urls: continue
             
-            # Layer 2: Step 2 -> Step 3
-            if len(urls) >= 3:
-                source_2 = f"{urls[1]} (Step 2)"
-                target_2 = f"{urls[2]} (Step 3)"
-                links_count[(source_2, target_2)] += 1
-                nodes.add(source_2)
-                nodes.add(target_2)
+            # Layer 0: Referrer -> First Page
+            referrer = session_referrers.get(session_id, "Direct Entry")
+            if referrer != "Internal": # Only map external/direct sources as start
+                source_ref = f"{referrer} (Source)"
+                target_1 = f"{urls[0]} (Step 1)"
+                links_count[(source_ref, target_1)] += 1
+                nodes.add(source_ref)
+                nodes.add(target_1)
+            
+            # Layer 1: Step 1 -> Step 2
+            if len(urls) >= 2:
+                source = f"{urls[0]} (Step 1)"
+                target = f"{urls[1]} (Step 2)"
+                links_count[(source, target)] += 1
+                nodes.add(source)
+                nodes.add(target)
+                
+                # Layer 2: Step 2 -> Step 3
+                if len(urls) >= 3:
+                    source_2 = f"{urls[1]} (Step 2)"
+                    target_2 = f"{urls[2]} (Step 3)"
+                    links_count[(source_2, target_2)] += 1
+                    nodes.add(source_2)
+                    nodes.add(target_2)
 
-    # Format for ECharts
-    echarts_nodes = [{"name": name} for name in nodes]
-    echarts_links = [{"source": k[0], "target": k[1], "value": v} for k, v in links_count.items()]
-    
-    return {"nodes": echarts_nodes, "links": echarts_links}
+        # Format for ECharts
+        echarts_nodes = [{"name": name} for name in nodes]
+        echarts_links = [{"source": k[0], "target": k[1], "value": v} for k, v in links_count.items()]
+        
+        return {"nodes": echarts_nodes, "links": echarts_links}
+    except Exception as e:
+        print(f"Error generating sankey data: {e}")
+        return {"nodes": [], "links": []}
 
 @app.delete("/api/analytics/clear")
 async def clear_data(db: Session = Depends(get_db)):
