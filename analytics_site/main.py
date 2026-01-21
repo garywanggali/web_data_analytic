@@ -329,19 +329,26 @@ async def root(db: Session = Depends(get_db)):
                 body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
                 .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
                 h1 {{ color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-                .metric-card {{ background: #f8f9fa; padding: 15px; border-radius: 6px; display: inline-block; border: 1px solid #dee2e6; margin-bottom: 20px; margin-right: 10px; }}
-                .metric-value {{ font-size: 24px; font-weight: bold; color: #007bff; }}
-                .metric-label {{ color: #6c757d; font-size: 14px; }}
+                
+                .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }}
+                .metric-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center; }}
+                .metric-value {{ font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 5px; }}
+                .metric-label {{ color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
+                
+                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
+                .chart-container {{ height: 350px; border: 1px solid #eee; border-radius: 8px; padding: 10px; }}
+                #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
+                
                 table {{ border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }}
                 th, td {{ border: 1px solid #dee2e6; padding: 12px; text-align: left; }}
                 th {{ background-color: #f8f9fa; color: #495057; font-weight: 600; }}
                 tr:nth-child(even) {{ background-color: #f8f9fa; }}
                 tr:hover {{ background-color: #f2f2f2; }}
+                
                 .refresh-btn {{ float: right; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; margin-left: 10px; }}
                 .refresh-btn:hover {{ background: #218838; }}
                 .clear-btn {{ float: right; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }}
                 .clear-btn:hover {{ background: #c82333; }}
-                #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
             </style>
         </head>
         <body>
@@ -350,13 +357,35 @@ async def root(db: Session = Depends(get_db)):
                 <button onclick="clearData()" class="clear-btn">Clear All Data</button>
                 <h1>Web Analytics Dashboard</h1>
                 
-                <div class="metric-card">
-                    <div class="metric-value">{count}</div>
-                    <div class="metric-label">Total Events Captured</div>
+                <div class="kpi-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="val-users">-</div>
+                        <div class="metric-label">Users</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="val-sessions">-</div>
+                        <div class="metric-label">Sessions</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="val-views">-</div>
+                        <div class="metric-label">Page Views</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="val-time">-</div>
+                        <div class="metric-label">Avg. Engagement (s)</div>
+                    </div>
                 </div>
 
-                <h3>User Flow (First 3 Steps)</h3>
+                <div class="charts-grid">
+                    <div id="source-chart" class="chart-container"></div>
+                    <div id="device-chart" class="chart-container"></div>
+                </div>
+                
+                <h3>User Flow</h3>
                 <div id="sankey-chart">Loading Chart...</div>
+
+                <h3>Top Pages</h3>
+                <div id="pages-chart" class="chart-container" style="margin-bottom: 30px;"></div>
 
                 <h3>Recent Events (Last 50)</h3>
                 <table>
@@ -378,49 +407,103 @@ async def root(db: Session = Depends(get_db)):
             </div>
 
             <script>
-                // Initialize Chart
-                var chartDom = document.getElementById('sankey-chart');
-                var myChart = echarts.init(chartDom);
+                // Initialize Charts
+                var sankeyChart = echarts.init(document.getElementById('sankey-chart'));
+                var sourceChart = echarts.init(document.getElementById('source-chart'));
+                var deviceChart = echarts.init(document.getElementById('device-chart'));
+                var pagesChart = echarts.init(document.getElementById('pages-chart'));
                 
-                fetch('/api/analytics/sankey')
-                    .then(response => response.json())
-                    .then(data => {{
-                        var option = {{
-                            tooltip: {{
-                                trigger: 'item',
-                                triggerOn: 'mousemove'
-                            }},
-                            series: [
-                                {{
-                                    type: 'sankey',
-                                    data: data.nodes,
-                                    links: data.links,
-                                    emphasis: {{
-                                        focus: 'adjacency'
-                                    }},
-                                    lineStyle: {{
-                                        color: 'gradient',
-                                        curveness: 0.5
-                                    }},
-                                    label: {{
-                                        position: 'right'
-                                    }}
-                                }}
-                            ]
-                        }};
-                        myChart.setOption(option);
-                    }});
-                
-                // Auto refresh chart every 30s
-                setInterval(() => {{
-                     fetch('/api/analytics/sankey')
-                        .then(response => response.json())
+                function loadData() {{
+                    // 1. Load Stats
+                    fetch('/api/analytics/stats')
+                        .then(r => r.json())
                         .then(data => {{
-                            myChart.setOption({{
-                                series: [{{ data: data.nodes, links: data.links }}]
+                            if(data.error) return;
+                            
+                            // KPIs
+                            document.getElementById('val-users').innerText = data.users;
+                            document.getElementById('val-sessions').innerText = data.sessions;
+                            document.getElementById('val-views').innerText = data.page_views;
+                            document.getElementById('val-time').innerText = data.avg_engagement_time + 's';
+                            
+                            // Source Pie
+                            sourceChart.setOption({{
+                                title: {{ text: 'Traffic Acquisition', left: 'center' }},
+                                tooltip: {{ trigger: 'item' }},
+                                series: [{{
+                                    name: 'Source',
+                                    type: 'pie',
+                                    radius: '50%',
+                                    data: data.top_sources,
+                                    emphasis: {{ itemStyle: {{ shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }} }}
+                                }}]
+                            }});
+                            
+                            // Device Pie
+                            deviceChart.setOption({{
+                                title: {{ text: 'Device Category', left: 'center' }},
+                                tooltip: {{ trigger: 'item' }},
+                                series: [{{
+                                    name: 'Device',
+                                    type: 'pie',
+                                    radius: ['40%', '70%'],
+                                    avoidLabelOverlap: false,
+                                    itemStyle: {{ borderRadius: 10, borderColor: '#fff', borderWidth: 2 }},
+                                    label: {{ show: false, position: 'center' }},
+                                    emphasis: {{ label: {{ show: true, fontSize: 20, fontWeight: 'bold' }} }},
+                                    data: data.devices
+                                }}]
+                            }});
+                            
+                            // Pages Bar
+                            pagesChart.setOption({{
+                                title: {{ text: 'Top Pages', left: 'center' }},
+                                tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }} }},
+                                grid: {{ left: '3%', right: '4%', bottom: '3%', containLabel: true }},
+                                xAxis: {{ type: 'value' }},
+                                yAxis: {{ type: 'category', data: data.top_pages.map(i => i.name).reverse() }},
+                                series: [{{
+                                    name: 'Views',
+                                    type: 'bar',
+                                    data: data.top_pages.map(i => i.value).reverse()
+                                }}]
                             }});
                         }});
-                }}, 30000);
+
+                    // 2. Load Sankey
+                    fetch('/api/analytics/sankey')
+                        .then(response => response.json())
+                        .then(data => {{
+                            var option = {{
+                                tooltip: {{ trigger: 'item', triggerOn: 'mousemove' }},
+                                series: [
+                                    {{
+                                        type: 'sankey',
+                                        data: data.nodes,
+                                        links: data.links,
+                                        emphasis: {{ focus: 'adjacency' }},
+                                        lineStyle: {{ color: 'gradient', curveness: 0.5 }},
+                                        label: {{ position: 'right' }}
+                                    }}
+                                ]
+                            }};
+                            sankeyChart.setOption(option);
+                        }});
+                }}
+                
+                // Initial Load
+                loadData();
+                
+                // Auto refresh chart every 30s
+                setInterval(loadData, 30000);
+                
+                // Resize charts on window resize
+                window.addEventListener('resize', function() {{
+                    sankeyChart.resize();
+                    sourceChart.resize();
+                    deviceChart.resize();
+                    pagesChart.resize();
+                }});
 
                 function clearData() {{
                     if(confirm("Are you sure you want to DELETE ALL analytics data? This cannot be undone.")) {{
