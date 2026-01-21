@@ -1,20 +1,28 @@
 #!/bin/bash
-# Script to run the analytics server
-# It runs on port 8001 to avoid conflict with rate_my_course (usually 8000)
+# 部署脚本 - 符合 yunguhs.com 教程标准
 
+# 1. 确保在脚本所在目录
 cd "$(dirname "$0")"
 
-# Check if venv exists, if not create it
-if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv .venv
-    source .venv/bin/activate
-    echo "Installing requirements..."
-    pip install -r requirements.txt
-else
-    source .venv/bin/activate
-fi
+echo "-----------------------------------"
+echo "🚀 开始部署 Analytics Site..."
+echo "-----------------------------------"
 
-echo "Starting Analytics Server on http://0.0.0.0:5270"
-uvicorn main:app --host 0.0.0.0 --port 5270
+# 2. 安装依赖 (使用 --user 避免权限问题)
+echo "📦 正在安装依赖..."
+pip3 install --user -r requirements.txt
 
+# 3. 启动服务
+# 使用 python3 -m uvicorn 确保能找到命令
+# host 0.0.0.0 允许公网访问
+# port 5270 是你指定的端口
+echo "-----------------------------------"
+echo "✅ 服务启动中..."
+echo "🌍 访问地址: http://110.40.153.38:5270/"
+echo "-----------------------------------"
+
+# 检查端口占用并清理（可选，防止端口冲突）
+fuser -k 5270/tcp >/dev/null 2>&1
+
+# 启动
+python3 -m uvicorn main:app --host 0.0.0.0 --port 5270
