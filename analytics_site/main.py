@@ -226,20 +226,20 @@ async def clear_data(db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/analytics/stats")
-async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db)):
+async def get_analytics_stats(time_range: str = "24h", db: Session = Depends(get_db)):
     try:
         # Time range filtering
         now = datetime.utcnow()
-        if range == "24h":
+        if time_range == "24h":
             from datetime import timedelta
             start_time = now - timedelta(hours=24)
-        elif range == "7d":
+        elif time_range == "7d":
             from datetime import timedelta
             start_time = now - timedelta(days=7)
-        elif range == "30d":
+        elif time_range == "30d":
             from datetime import timedelta
             start_time = now - timedelta(days=30)
-        elif range == "all":
+        elif time_range == "all":
             start_time = datetime.min
         else:
             # Default to 24h if invalid
@@ -345,7 +345,7 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
         
         for e in events:
             if e.event_type == 'pageview':
-                if range == "24h":
+                if time_range == "24h":
                     # Bucket by hour: "YYYY-MM-DD HH:00"
                     time_key = e.timestamp.strftime("%Y-%m-%d %H:00")
                 else:
@@ -367,7 +367,7 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
         for key in sorted_keys:
             data = trend_data[key]
             # Format label for display
-            if range == "24h":
+            if time_range == "24h":
                 # key is "YYYY-MM-DD HH:00", show "HH:00"
                 label = key.split(" ")[1]
             else:
