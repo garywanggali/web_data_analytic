@@ -226,13 +226,29 @@ async def clear_data(db: Session = Depends(get_db)):
         return {"status": "error", "message": str(e)}
 
 @app.get("/api/analytics/stats")
-async def get_analytics_stats(db: Session = Depends(get_db)):
+async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db)):
     try:
-        # Time range: Last 24 hours (for simplicity)
-        # In a real app, accept start_date/end_date query params
+        # Time range filtering
         now = datetime.utcnow()
-        # limit to recent data for performance
-        events = db.query(Event).order_by(desc(Event.timestamp)).limit(5000).all()
+        if range == "24h":
+            from datetime import timedelta
+            start_time = now - timedelta(hours=24)
+        elif range == "7d":
+            from datetime import timedelta
+            start_time = now - timedelta(days=7)
+        elif range == "30d":
+            from datetime import timedelta
+            start_time = now - timedelta(days=30)
+        elif range == "all":
+            start_time = datetime.min
+        else:
+            # Default to 24h if invalid
+            from datetime import timedelta
+            start_time = now - timedelta(hours=24)
+
+        # Query events with time filter
+        query = db.query(Event).filter(Event.timestamp >= start_time)
+        events = query.order_by(desc(Event.timestamp)).limit(5000).all()
         
         # 1. User & Session Metrics
         total_users = len(set(e.visitor_id for e in events))
@@ -364,12 +380,19 @@ async def root(db: Session = Depends(get_db)):
                 .refresh-btn:hover {{ background: #218838; }}
                 .clear-btn {{ float: right; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }}
                 .clear-btn:hover {{ background: #c82333; }}
+                .time-select {{ float: right; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-right: 10px; font-size: 14px; }}
             </style>
         </head>
         <body>
             <div class="container">
-                <a href="/" class="refresh-btn">Refresh Data</a>
+                <a href="/" class="refresh-btn">Refresh</a>
                 <button onclick="clearData()" class="clear-btn">Clear All Data</button>
+                <select id="time-range" class="time-select" onchange="loadData()">
+                    <option value="24h">Last 24 Hours</option>
+                    <option value="7d">Last 7 Days</option>
+                    <option value="30d">Last 30 Days</option>
+                    <option value="all">All Time</option>
+                </select>
                 <h1>Web Analytics Dashboard</h1>
                 
                 <div class="kpi-grid">
@@ -429,8 +452,10 @@ async def root(db: Session = Depends(get_db)):
                 var pagesChart = echarts.init(document.getElementById('pages-chart'));
                 
                 function loadData() {{
+                    const range = document.getElementById('time-range').value;
+                    
                     // 1. Load Stats
-                    fetch('/api/analytics/stats')
+                    fetch('/api/analytics/stats?range=' + range)
                         .then(r => r.json())
                         .then(data => {{
                             if(data.error) return;
