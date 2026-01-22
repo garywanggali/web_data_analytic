@@ -71,12 +71,12 @@ async def track_event(
     
     return EventResponse(received_at=datetime.utcnow())
 
-@app.get("/wa.js")
+@app.get("/sdk.js")
 async def get_tracker_js():
     """
     Serves the client-side JavaScript library.
     """
-    file_path = os.path.join(os.path.dirname(__file__), "static", "wa.js")
+    file_path = os.path.join(os.path.dirname(__file__), "static", "sdk.js")
     return FileResponse(file_path, media_type="application/javascript")
 
 from urllib.parse import urlparse, parse_qs
