@@ -377,12 +377,53 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
             trend_users.append(len(data["users"]))
             trend_sessions.append(len(data["sessions"]))
             trend_pvs.append(data["page_views"])
+
+        # 8. Real-time Analysis (Last 30 mins)
+        # Fetch events strictly from the last 30 minutes for higher resolution
+        from datetime import timedelta
+        rt_start = now - timedelta(minutes=30)
+        rt_events = db.query(Event).filter(Event.timestamp >= rt_start).all()
+        
+        # Calculate "Live Users" (Active in last 5 mins)
+        live_cutoff = now - timedelta(minutes=5)
+        live_users = set()
+        for e in rt_events:
+            if e.timestamp >= live_cutoff:
+                live_users.add(e.visitor_id)
+        live_user_count = len(live_users)
+        
+        # Calculate Real-time Trend (Minute by Minute)
+        # We want to show "Active Users" per minute
+        rt_trend_data = []
+        rt_labels = []
+        
+        # Generate last 30 minute buckets
+        for i in range(30):
+            # Time window for this bucket: [t_end-1min, t_end]
+            # Actually, standard "Real-time" charts often show "Events per minute" or "Active Users in that minute"
+            bucket_time = now - timedelta(minutes=(29-i))
+            bucket_str = bucket_time.strftime("%H:%M")
+            rt_labels.append(bucket_str)
+            
+            # Count unique users active in this specific minute
+            # Strict minute matching:
+            minute_users = set()
+            for e in rt_events:
+                # Check if event falls in this minute
+                if e.timestamp.strftime("%H:%M") == bucket_str:
+                    minute_users.add(e.visitor_id)
+            rt_trend_data.append(len(minute_users))
         
         return {
             "users": total_users,
             "sessions": total_sessions,
             "page_views": page_views,
             "avg_engagement_time": avg_engagement_time,
+            "live_users": live_user_count, # Added
+            "realtime_trend": {            # Added
+                "labels": rt_labels,
+                "values": rt_trend_data
+            },
             "trend": {
                 "labels": trend_labels,
                 "users": trend_users,

@@ -61,6 +61,24 @@
                 </div>
             </div>
 
+            <!-- New Real-time Section -->
+            <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 30px; border: 1px solid #90caf9;">
+                <h2 style="margin-top: 0; color: #1565c0; display: flex; align-items: center;">
+                    <span style="height: 12px; width: 12px; background-color: #2e7d32; border-radius: 50%; display: inline-block; margin-right: 10px; box-shadow: 0 0 0 4px rgba(46, 125, 50, 0.2);"></span>
+                    Real-Time Overview
+                </h2>
+                <div style="display: flex; gap: 20px;">
+                    <div style="flex: 1; text-align: center; background: white; padding: 20px; border-radius: 8px; display: flex; flex-direction: column; justify-content: center;">
+                        <div style="font-size: 14px; color: #666;">USERS RIGHT NOW</div>
+                        <div id="val-live-users" style="font-size: 56px; font-weight: bold; color: #1565c0;">-</div>
+                        <div style="font-size: 12px; color: #888;">Active in last 5 mins</div>
+                    </div>
+                    <div style="flex: 3; background: white; padding: 10px; border-radius: 8px;">
+                        <div id="realtime-chart" style="width: 100%; height: 200px;"></div>
+                    </div>
+                </div>
+            </div>
+
             <h3>Growth Trend</h3>
             <div id="trend-chart" class="chart-container" style="width: 100%; margin-bottom: 30px;"></div>
 
@@ -100,6 +118,7 @@
             // Initialize Charts
             var sankeyChart = echarts.init(document.getElementById('sankey-chart'));
             var trendChart = echarts.init(document.getElementById('trend-chart'));
+            var realtimeChart = echarts.init(document.getElementById('realtime-chart')); // Added
             var sourceChart = echarts.init(document.getElementById('source-chart'));
             var deviceChart = echarts.init(document.getElementById('device-chart'));
             var userTypeChart = echarts.init(document.getElementById('user-type-chart'));
@@ -121,6 +140,27 @@
                         document.getElementById('val-views').innerText = data.page_views;
                         document.getElementById('val-time').innerText = data.avg_engagement_time + 's';
                         
+                        // Real-time Update
+                        if(data.live_users !== undefined) {
+                            document.getElementById('val-live-users').innerText = data.live_users;
+                            
+                            realtimeChart.setOption({
+                                title: { text: 'Active Users (Last 30m)', left: 'center', textStyle: { fontSize: 12 } },
+                                tooltip: { trigger: 'axis' },
+                                grid: { left: '3%', right: '4%', bottom: '3%', top: '30', containLabel: true },
+                                xAxis: { type: 'category', boundaryGap: false, data: data.realtime_trend.labels },
+                                yAxis: { type: 'value', minInterval: 1 },
+                                series: [{
+                                    name: 'Active Users',
+                                    type: 'line',
+                                    data: data.realtime_trend.values,
+                                    smooth: true,
+                                    areaStyle: { color: 'rgba(33, 150, 243, 0.2)' },
+                                    itemStyle: { color: '#2196f3' }
+                                }]
+                            });
+                        }
+
                         // Trend Chart
                         trendChart.setOption({
                             tooltip: { trigger: 'axis' },
@@ -278,6 +318,7 @@
             window.addEventListener('resize', function() {
                 sankeyChart.resize();
                 trendChart.resize();
+                realtimeChart.resize(); // Added
                 sourceChart.resize();
                 deviceChart.resize();
                 userTypeChart.resize();
