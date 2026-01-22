@@ -202,8 +202,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify(payload),
-                    keepalive: true // <--- Fix for cancelled requests during navigation
+                    body: JSON.stringify(payload)
                 }).catch(console.error);
             }
         }

@@ -340,11 +340,55 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
                 user_type_counts["New Visitors"] += 1
                 user_type_pvs["New Visitors"] += pvs
         
+        # 7. Trend Analysis
+        trend_data = defaultdict(lambda: {"users": set(), "sessions": set(), "page_views": 0})
+        
+        for e in events:
+            if e.event_type == 'pageview':
+                if range == "24h":
+                    # Bucket by hour: "YYYY-MM-DD HH:00"
+                    time_key = e.timestamp.strftime("%Y-%m-%d %H:00")
+                else:
+                    # Bucket by day: "YYYY-MM-DD"
+                    time_key = e.timestamp.strftime("%Y-%m-%d")
+                
+                trend_data[time_key]["users"].add(e.visitor_id)
+                trend_data[time_key]["sessions"].add(e.session_id)
+                trend_data[time_key]["page_views"] += 1
+
+        # Sort by time
+        sorted_keys = sorted(trend_data.keys())
+        
+        trend_users = []
+        trend_sessions = []
+        trend_pvs = []
+        trend_labels = []
+
+        for key in sorted_keys:
+            data = trend_data[key]
+            # Format label for display
+            if range == "24h":
+                # key is "YYYY-MM-DD HH:00", show "HH:00"
+                label = key.split(" ")[1]
+            else:
+                label = key
+            
+            trend_labels.append(label)
+            trend_users.append(len(data["users"]))
+            trend_sessions.append(len(data["sessions"]))
+            trend_pvs.append(data["page_views"])
+        
         return {
             "users": total_users,
             "sessions": total_sessions,
             "page_views": page_views,
             "avg_engagement_time": avg_engagement_time,
+            "trend": {
+                "labels": trend_labels,
+                "users": trend_users,
+                "sessions": trend_sessions,
+                "page_views": trend_pvs
+            },
             "top_sources": [{"name": k, "value": v} for k, v in top_sources],
             "top_pages": [{"name": k, "value": v} for k, v in top_pages],
             "devices": [{"name": k, "value": v} for k, v in devices.items()],
@@ -356,266 +400,23 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
         traceback.print_exc()
         return {"error": str(e)}
 
-@app.get("/", response_class=HTMLResponse)
-async def root(db: Session = Depends(get_db)):
-    events = db.query(Event).order_by(desc(Event.timestamp)).limit(50).all()
-    count = db.query(Event).count()
-    
-    rows = ""
-    for event in events:
-        rows += f"""
-        <tr>
-            <td>{event.id}</td>
-            <td>{event.event_type}</td>
-            <td style="word-break: break-all;"><a href="{event.url}" target="_blank">{event.url}</a></td>
-            <td>{event.timestamp.strftime('%Y-%m-%d %H:%M:%S')}</td>
-            <td><span title="{event.visitor_id}">{event.visitor_id[:8]}...</span></td>
-            <td>{event.ip_address}</td>
-            <td>{event.data}</td>
-        </tr>
-        """
-        
-    html_content = f"""
-    <!DOCTYPE html>
-    <html>
-        <head>
-            <title>Web Analytics Dashboard</title>
-            <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-            <style>
-                body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-                .container {{ max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
-                h1 {{ color: #333; border-bottom: 2px solid #eee; padding-bottom: 10px; }}
-                
-                .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 30px; }}
-                .metric-card {{ background: #f8f9fa; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; text-align: center; }}
-                .metric-value {{ font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 5px; }}
-                .metric-label {{ color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
-                
-                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
-                .chart-container {{ height: 350px; border: 1px solid #eee; border-radius: 8px; padding: 10px; }}
-                #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
-                
-                table {{ border-collapse: collapse; width: 100%; margin-top: 10px; font-size: 14px; }}
-                th, td {{ border: 1px solid #dee2e6; padding: 12px; text-align: left; }}
-                th {{ background-color: #f8f9fa; color: #495057; font-weight: 600; }}
-                tr:nth-child(even) {{ background-color: #f8f9fa; }}
-                tr:hover {{ background-color: #f2f2f2; }}
-                
-                .refresh-btn {{ float: right; padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; margin-left: 10px; }}
-                .refresh-btn:hover {{ background: #218838; }}
-                .clear-btn {{ float: right; padding: 8px 16px; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; }}
-                .clear-btn:hover {{ background: #c82333; }}
-                .time-select {{ float: right; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-right: 10px; font-size: 14px; }}
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <a href="/" class="refresh-btn">Refresh</a>
-                <button onclick="clearData()" class="clear-btn">Clear All Data</button>
-                <select id="time-range" class="time-select" onchange="loadData()">
-                    <option value="24h">Last 24 Hours</option>
-                    <option value="7d">Last 7 Days</option>
-                    <option value="30d">Last 30 Days</option>
-                    <option value="all">All Time</option>
-                </select>
-                <h1>Web Analytics Dashboard</h1>
-                
-                <div class="kpi-grid">
-                    <div class="metric-card">
-                        <div class="metric-value" id="val-users">-</div>
-                        <div class="metric-label">Users</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="val-sessions">-</div>
-                        <div class="metric-label">Sessions</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="val-views">-</div>
-                        <div class="metric-label">Page Views</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="val-time">-</div>
-                        <div class="metric-label">Avg. Engagement (s)</div>
-                    </div>
-                </div>
-
-                <div class="charts-grid">
-                    <div id="source-chart" class="chart-container"></div>
-                    <div id="device-chart" class="chart-container"></div>
-                    <div id="user-type-chart" class="chart-container"></div>
-                    <div id="user-pv-chart" class="chart-container"></div>
-                </div>
-                
-                <h3>User Flow</h3>
-                <div id="sankey-chart">Loading Chart...</div>
-
-                <h3>Top Pages</h3>
-                <div id="pages-chart" class="chart-container" style="margin-bottom: 30px;"></div>
-
-                <h3>Recent Events (Last 50)</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th width="50">ID</th>
-                            <th width="100">Type</th>
-                            <th>URL</th>
-                            <th width="180">Time (UTC)</th>
-                            <th width="100">Visitor</th>
-                            <th width="120">IP</th>
-                            <th>Data</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows if rows else '<tr><td colspan="7" style="text-align:center">No events recorded yet. Try navigating on the main site!</td></tr>'}
-                    </tbody>
-                </table>
-            </div>
-
-            <script>
-                // Initialize Charts
-                var sankeyChart = echarts.init(document.getElementById('sankey-chart'));
-                var sourceChart = echarts.init(document.getElementById('source-chart'));
-                var deviceChart = echarts.init(document.getElementById('device-chart'));
-                var userTypeChart = echarts.init(document.getElementById('user-type-chart'));
-                var userPvChart = echarts.init(document.getElementById('user-pv-chart'));
-                var pagesChart = echarts.init(document.getElementById('pages-chart'));
-                
-                function loadData() {{
-                    const range = document.getElementById('time-range').value;
-                    
-                    // 1. Load Stats
-                    fetch('/api/analytics/stats?range=' + range)
-                        .then(r => r.json())
-                        .then(data => {{
-                            if(data.error) return;
-                            
-                            // KPIs
-                            document.getElementById('val-users').innerText = data.users;
-                            document.getElementById('val-sessions').innerText = data.sessions;
-                            document.getElementById('val-views').innerText = data.page_views;
-                            document.getElementById('val-time').innerText = data.avg_engagement_time + 's';
-                            
-                            // Source Pie
-                            sourceChart.setOption({{
-                                title: {{ text: 'Traffic Acquisition', left: 'center' }},
-                                tooltip: {{ trigger: 'item' }},
-                                series: [{{
-                                    name: 'Source',
-                                    type: 'pie',
-                                    radius: '50%',
-                                    data: data.top_sources,
-                                    emphasis: {{ itemStyle: {{ shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }} }}
-                                }}]
-                            }});
-                            
-                            // Device Pie
-                            deviceChart.setOption({{
-                                title: {{ text: 'Device Category', left: 'center' }},
-                                tooltip: {{ trigger: 'item' }},
-                                series: [{{
-                                    name: 'Device',
-                                    type: 'pie',
-                                    radius: ['40%', '70%'],
-                                    avoidLabelOverlap: false,
-                                    itemStyle: {{ borderRadius: 10, borderColor: '#fff', borderWidth: 2 }},
-                                    label: {{ show: false, position: 'center' }},
-                                    emphasis: {{ label: {{ show: true, fontSize: 20, fontWeight: 'bold' }} }},
-                                    data: data.devices
-                                }}]
-                            }});
-                            
-                            // User Type Pie
-                            userTypeChart.setOption({{
-                                title: {{ text: 'New vs Returning', left: 'center' }},
-                                tooltip: {{ trigger: 'item' }},
-                                series: [{{
-                                    name: 'User Type',
-                                    type: 'pie',
-                                    radius: '50%',
-                                    data: data.user_types,
-                                    emphasis: {{ itemStyle: {{ shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }} }}
-                                }}]
-                            }});
-                            
-                            // User Type PV Bar
-                            userPvChart.setOption({{
-                                title: {{ text: 'Page Views by User Type', left: 'center' }},
-                                tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }} }},
-                                grid: {{ left: '3%', right: '4%', bottom: '3%', containLabel: true }},
-                                xAxis: {{ type: 'category', data: data.user_type_pvs.map(i => i.name) }},
-                                yAxis: {{ type: 'value' }},
-                                series: [{{
-                                    name: 'Page Views',
-                                    type: 'bar',
-                                    data: data.user_type_pvs.map(i => i.value),
-                                    itemStyle: {{ color: '#5470c6' }}
-                                }}]
-                            }});
-                            
-                            // Pages Bar
-                            pagesChart.setOption({{
-                                title: {{ text: 'Top Pages', left: 'center' }},
-                                tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }} }},
-                                grid: {{ left: '3%', right: '4%', bottom: '3%', containLabel: true }},
-                                xAxis: {{ type: 'value' }},
-                                yAxis: {{ type: 'category', data: data.top_pages.map(i => i.name).reverse() }},
-                                series: [{{
-                                    name: 'Views',
-                                    type: 'bar',
-                                    data: data.top_pages.map(i => i.value).reverse()
-                                }}]
-                            }});
-                        }});
-
-                    // 2. Load Sankey
-                    fetch('/api/analytics/sankey')
-                        .then(response => response.json())
-                        .then(data => {{
-                            var option = {{
-                                tooltip: {{ trigger: 'item', triggerOn: 'mousemove' }},
-                                series: [
-                                    {{
-                                        type: 'sankey',
-                                        data: data.nodes,
-                                        links: data.links,
-                                        emphasis: {{ focus: 'adjacency' }},
-                                        lineStyle: {{ color: 'gradient', curveness: 0.5 }},
-                                        label: {{ position: 'right' }}
-                                    }}
-                                ]
-                            }};
-                            sankeyChart.setOption(option);
-                        }});
-                }}
-                
-                // Initial Load
-                loadData();
-                
-                // Auto refresh chart every 30s
-                setInterval(loadData, 30000);
-                
-                // Resize charts on window resize
-                window.addEventListener('resize', function() {{
-                    sankeyChart.resize();
-                    sourceChart.resize();
-                    deviceChart.resize();
-                    userTypeChart.resize();
-                    userPvChart.resize();
-                    pagesChart.resize();
-                }});
-
-                function clearData() {{
-                    if(confirm("Are you sure you want to DELETE ALL analytics data? This cannot be undone.")) {{
-                        fetch('/api/analytics/clear', {{ method: 'DELETE' }})
-                            .then(response => response.json())
-                            .then(data => {{
-                                alert(data.message);
-                                location.reload();
-                            }});
-                    }}
-                }}
-            </script>
-        </body>
-    </html>
+@app.get("/api/analytics/events")
+async def get_recent_events(db: Session = Depends(get_db)):
     """
+    Returns the most recent 50 events for the dashboard table.
+    """
+    events = db.query(Event).order_by(desc(Event.timestamp)).limit(50).all()
+    return events
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    """
+    Serves the dashboard HTML file.
+    """
+    file_path = os.path.join(os.path.dirname(__file__), "templates", "index.html")
+    if not os.path.exists(file_path):
+        return HTMLResponse(content="<h1>Error: Template not found</h1>", status_code=404)
+        
+    with open(file_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
     return html_content
