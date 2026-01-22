@@ -88,12 +88,28 @@ The backend exposes the following RESTful endpoints:
 
 ### C. Data Visualization
 
-The dashboard visualizes the data to provide actionable insights:
+The dashboard visualizes the data to provide actionable insights. Recent updates have introduced advanced analytical capabilities:
 
-1.  **KPI Cards**: Display high-level metrics: Total Users, Sessions, Page Views, and Average Engagement Time.
-2.  **Traffic Acquisition (Pie Chart)**: Visualizes the distribution of traffic sources (e.g., Direct, WeChat, Google Search), helping identifying the most effective marketing channels.
-3.  **User Flow (Sankey Diagram)**: Maps the user journey from the landing page (or source) to subsequent interactions (Step 1 -> Step 2 -> Step 3). This helps identify drop-off points and popular navigation paths.
-4.  **Top Pages (Bar Chart)**: Ranks the most visited pages to identify popular content.
+1.  **Real-Time Monitoring**:
+    *   **Live Users**: Displays the count of unique users active within the last 5 minutes.
+    *   **Real-Time Trend**: A dynamic line chart showing user activity minute-by-minute for the last 30 minutes, allowing administrators to monitor immediate traffic spikes.
+
+2.  **Growth Trend Analysis**:
+    *   A multi-line chart tracking **Users**, **Sessions**, and **Page Views** over time.
+    *   Supports dynamic time aggregation (hourly buckets for 24h view, daily buckets for longer periods) to visualize growth patterns and peak traffic hours.
+
+3.  **User Retention Analysis (New vs. Returning)**:
+    *   Classifies users based on their session history.
+    *   **New Visitors**: Users with only one session in the selected period.
+    *   **Returning Visitors**: Users with multiple sessions, indicating retention and engagement.
+    *   Visualized via pie charts (user count ratio) and bar charts (activity volume by user type).
+
+4.  **Traffic Acquisition & User Flow**:
+    *   **Acquisition Pie Chart**: Breaks down traffic by source (Direct, Search, Social), prioritizing UTM parameters and User-Agent detection (e.g., WeChat).
+    *   **Sankey Diagram**: Maps the user journey from entry to exit, highlighting popular navigation paths and drop-off points.
+
+5.  **Interactive Filtering**:
+    *   A global time range selector (24 Hours, 7 Days, 30 Days, All Time) allows users to slice data across different temporal dimensions, updating all charts dynamically via AJAX.
 
 ## IV. Deployment
 
