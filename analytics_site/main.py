@@ -308,14 +308,29 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
         
         # 5. Device Breakdown
         devices = defaultdict(int)
+        # 6. User Type (New vs Returning based on session count in period)
+        user_types = {"New Visitors": 0, "Returning Visitors": 0}
+        visitor_sessions = defaultdict(set)
+
         for e in events:
             if e.event_type == 'pageview':
+                # Device
                 ua = (e.user_agent or "").lower()
                 if "mobile" in ua or "android" in ua or "iphone" in ua:
                     dev = "Mobile"
                 else:
                     dev = "Desktop"
                 devices[dev] += 1
+                
+                # User Type Prep
+                visitor_sessions[e.visitor_id].add(e.session_id)
+        
+        # Calculate User Types
+        for vid, sessions in visitor_sessions.items():
+            if len(sessions) > 1:
+                user_types["Returning Visitors"] += 1
+            else:
+                user_types["New Visitors"] += 1
         
         return {
             "users": total_users,
@@ -324,7 +339,8 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
             "avg_engagement_time": avg_engagement_time,
             "top_sources": [{"name": k, "value": v} for k, v in top_sources],
             "top_pages": [{"name": k, "value": v} for k, v in top_pages],
-            "devices": [{"name": k, "value": v} for k, v in devices.items()]
+            "devices": [{"name": k, "value": v} for k, v in devices.items()],
+            "user_types": [{"name": k, "value": v} for k, v in user_types.items()]
         }
     except Exception as e:
         import traceback
@@ -366,7 +382,7 @@ async def root(db: Session = Depends(get_db)):
                 .metric-value {{ font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 5px; }}
                 .metric-label {{ color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
                 
-                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
+                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
                 .chart-container {{ height: 350px; border: 1px solid #eee; border-radius: 8px; padding: 10px; }}
                 #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
                 
@@ -417,6 +433,7 @@ async def root(db: Session = Depends(get_db)):
                 <div class="charts-grid">
                     <div id="source-chart" class="chart-container"></div>
                     <div id="device-chart" class="chart-container"></div>
+                    <div id="user-type-chart" class="chart-container"></div>
                 </div>
                 
                 <h3>User Flow</h3>
@@ -449,6 +466,7 @@ async def root(db: Session = Depends(get_db)):
                 var sankeyChart = echarts.init(document.getElementById('sankey-chart'));
                 var sourceChart = echarts.init(document.getElementById('source-chart'));
                 var deviceChart = echarts.init(document.getElementById('device-chart'));
+                var userTypeChart = echarts.init(document.getElementById('user-type-chart'));
                 var pagesChart = echarts.init(document.getElementById('pages-chart'));
                 
                 function loadData() {{
@@ -492,6 +510,19 @@ async def root(db: Session = Depends(get_db)):
                                     label: {{ show: false, position: 'center' }},
                                     emphasis: {{ label: {{ show: true, fontSize: 20, fontWeight: 'bold' }} }},
                                     data: data.devices
+                                }}]
+                            }});
+                            
+                            // User Type Pie
+                            userTypeChart.setOption({{
+                                title: {{ text: 'New vs Returning', left: 'center' }},
+                                tooltip: {{ trigger: 'item' }},
+                                series: [{{
+                                    name: 'User Type',
+                                    type: 'pie',
+                                    radius: '50%',
+                                    data: data.user_types,
+                                    emphasis: {{ itemStyle: {{ shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' }} }}
                                 }}]
                             }});
                             
@@ -542,6 +573,7 @@ async def root(db: Session = Depends(get_db)):
                     sankeyChart.resize();
                     sourceChart.resize();
                     deviceChart.resize();
+                    userTypeChart.resize();
                     pagesChart.resize();
                 }});
 
