@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 # Configuration
 # Point to the REMOTE production analytics server
 ANALYTICS_ENDPOINT = "http://110.40.153.38:5270/api/collect"
-BASE_URL = "http://110.40.153.38:8802"
+BASE_URL = "http://110.40.153.38:5007"
 
 # Simulation Parameters
 NUM_USERS = 50  # Increase user count for better chart density
