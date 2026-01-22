@@ -1,0 +1,204 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body {
+        font-family: "Times New Roman", Times, serif;
+        line-height: 1.6;
+        max-width: 800px;
+        margin: 40px auto;
+        padding: 20px;
+    }
+    h1 {
+        text-align: center;
+        font-size: 24px;
+        margin-bottom: 5px;
+    }
+    h2 {
+        border-bottom: 1px solid #000;
+        padding-bottom: 5px;
+        margin-top: 30px;
+        font-size: 18px;
+        text-transform: uppercase;
+    }
+    h3 {
+        font-size: 16px;
+        margin-top: 20px;
+        font-style: italic;
+    }
+    code {
+        background: #f4f4f4;
+        padding: 2px 5px;
+        font-family: "Courier New", Courier, monospace;
+    }
+    pre {
+        background: #f4f4f4;
+        padding: 10px;
+        overflow-x: auto;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+        margin: 20px 0;
+    }
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: left;
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    .center {
+        text-align: center;
+    }
+</style>
+</head>
+<body>
+<h1>Design and Implementation of a User Behavior Tracking and Analytics System</h1>
+<p><strong>Author:</strong> Gary Wang<br />
+<strong>Date:</strong> January 22, 2026</p>
+<h2>Abstract</h2>
+<p>This paper presents the design and implementation of a comprehensive User Behavior Tracking and Analytics System. The system is designed to capture, process, and visualize user interactions on a web-based platform in real-time. Key features include a lightweight JavaScript SDK for frontend telemetry, a scalable FastAPI-based backend for data ingestion, and an interactive dashboard for data visualization. The system supports advanced tracking capabilities such as session management, source attribution (UTM/Referrer/User-Agent), scroll depth tracking, and engagement time analysis. The solution was successfully deployed in a production-like environment, demonstrating its effectiveness in providing actionable insights into user behavior.</p>
+<h2>I. Introduction</h2>
+<p>In the modern digital landscape, understanding user behavior is critical for optimizing user experience (UX) and improving conversion rates. While commercial solutions like Google Analytics 4 (GA4) exist, they often come with data ownership concerns and complexity. This project aims to build a custom, lightweight, and privacy-focused analytics system that captures essential metrics—User, Acquisition, and Engagement—similar to industry standards.</p>
+<p>The objectives of this project are:
+1.  Develop a non-intrusive frontend script to capture user events (page views, clicks, scrolls).
+2.  Build a high-performance backend API to handle concurrent data ingestion.
+3.  Design a data visualization dashboard to interpret the collected data.
+4.  Deploy the full stack to a remote server for real-world testing.</p>
+<h2>II. System Architecture</h2>
+<p>The system follows a classic three-tier architecture: Presentation Layer (Frontend SDK &amp; Dashboard), Application Layer (Backend API), and Data Layer (Database).</p>
+<h3>A. Architecture Diagram</h3>
+<pre><code class="language-mermaid">graph LR
+    User[User Browser] --&gt;|sdk.js| SDK[Frontend Tracker SDK]
+    SDK --&gt;|POST /api/collect| API[Analytics API (FastAPI)]
+    API --&gt;|Write| DB[(SQLite Database)]
+    Admin[Administrator] --&gt;|View| Dash[Visualization Dashboard]
+    Dash --&gt;|GET /api/stats| API
+    API --&gt;|Read| DB
+</code></pre>
+<h3>B. Components</h3>
+<ol>
+<li><strong>Frontend Tracker SDK (<code>sdk.js</code>)</strong>: A lightweight JavaScript library embedded in the client website. It automatically handles session generation, event listeners (scroll, click, visibility change), and data transmission via <code>fetch</code> or <code>navigator.sendBeacon</code>.</li>
+<li><strong>Backend API</strong>: Built with Python <strong>FastAPI</strong>, chosen for its high performance and asynchronous capabilities. It exposes endpoints for data collection and retrieval.</li>
+<li><strong>Database</strong>: <strong>SQLite</strong> via <strong>SQLAlchemy ORM</strong> is used for data persistence. It stores event logs including timestamp, visitor ID, session ID, event type, and metadata.</li>
+<li><strong>Visualization Dashboard</strong>: An HTML/JS interface powered by <strong>ECharts</strong>, providing real-time graphs for user flow, acquisition sources, and engagement metrics.</li>
+</ol>
+<h2>III. Implementation Details</h2>
+<h3>A. Frontend Event Tracking Method</h3>
+<p>The tracking logic is encapsulated in <code>sdk.js</code>. Key implementation details include:</p>
+<ol>
+<li>
+<p><strong>Session Management &amp; User Identification</strong>:</p>
+<ul>
+<li><strong>User (Visitor)</strong>: Represents a unique individual or device. Identified by a persistent UUID (<code>visitor_id</code>) stored in <code>localStorage</code>. This ID remains constant across multiple visits unless the browser cache is cleared.</li>
+<li><strong>Session</strong>: Represents a single continuous period of user activity. Identified by a temporary UUID (<code>session_id</code>) stored in <code>sessionStorage</code>. A session expires after 30 minutes of inactivity.</li>
+<li><strong>Relationship</strong>: One User can generate multiple Sessions over time (e.g., visiting in the morning and again at night counts as 1 User but 2 Sessions).</li>
+</ul>
+</li>
+<li>
+<p><strong>Event Types</strong>:</p>
+<ul>
+<li><strong>Page View</strong>: Triggered on page load. Captures URL, title, and performance metrics (load time).</li>
+<li><strong>User Engagement</strong>: Triggered on <code>beforeunload</code> or <code>visibilitychange</code>. Calculates the duration the page was active in the foreground.</li>
+<li><strong>Scroll</strong>: Triggered when the user scrolls past 90% of the page height.</li>
+<li><strong>Click</strong>: Automatically intercepts clicks on external links (<code>&lt;a&gt;</code> tags) for outbound traffic tracking.</li>
+</ul>
+</li>
+<li>
+<p><strong>Source Attribution</strong>:
+    The system implements a priority-based attribution model:</p>
+<ul>
+<li><strong>Priority 1</strong>: UTM Parameters (<code>utm_source</code> in URL).</li>
+<li><strong>Priority 2</strong>: User-Agent detection (e.g., distinguishing WeChat or DingTalk built-in browsers).</li>
+<li><strong>Priority 3</strong>: <code>document.referrer</code> analysis (e.g., Google, Bing, direct entry).</li>
+</ul>
+</li>
+</ol>
+<h3>B. API Design</h3>
+<p>The backend exposes the following RESTful endpoints:</p>
+<ol>
+<li>
+<p><strong>Data Collection</strong>:</p>
+<ul>
+<li><code>POST /api/collect</code></li>
+<li><strong>Request Body</strong>:
+    <code>json
+    {
+      "event_type": "pageview",
+      "url": "http://example.com/course/1",
+      "referrer": "https://google.com",
+      "visitor_id": "uuid-v4",
+      "session_id": "uuid-v4",
+      "data": { "load_time_ms": 120, "source": "google" }
+    }</code></li>
+<li><strong>Response</strong>: <code>200 OK</code></li>
+</ul>
+</li>
+<li>
+<p><strong>Data Retrieval</strong>:</p>
+<ul>
+<li><code>GET /api/analytics/stats</code>: Returns aggregated metrics (Total Users, Sessions, Top Sources, Device Breakdown).</li>
+<li><code>GET /api/analytics/sankey</code>: Returns node-link data for generating the User Flow Sankey chart.</li>
+</ul>
+</li>
+</ol>
+<h3>C. Data Visualization</h3>
+<p>The dashboard visualizes the data to provide actionable insights. Recent updates have introduced advanced analytical capabilities:</p>
+<ol>
+<li>
+<p><strong>Real-Time Monitoring</strong>:</p>
+<ul>
+<li><strong>Live Users</strong>: Displays the count of unique users active within the last 5 minutes.</li>
+<li><strong>Real-Time Trend</strong>: A dynamic line chart showing user activity minute-by-minute for the last 30 minutes, allowing administrators to monitor immediate traffic spikes.</li>
+</ul>
+</li>
+<li>
+<p><strong>Growth Trend Analysis</strong>:</p>
+<ul>
+<li>A multi-line chart tracking <strong>Users</strong>, <strong>Sessions</strong>, and <strong>Page Views</strong> over time.</li>
+<li>Supports dynamic time aggregation (hourly buckets for 24h view, daily buckets for longer periods) to visualize growth patterns and peak traffic hours.</li>
+</ul>
+</li>
+<li>
+<p><strong>User Retention Analysis (New vs. Returning)</strong>:</p>
+<ul>
+<li>Classifies users based on their session history.</li>
+<li><strong>New Visitors</strong>: Users with only one session in the selected period.</li>
+<li><strong>Returning Visitors</strong>: Users with multiple sessions, indicating retention and engagement.</li>
+<li>Visualized via pie charts (user count ratio) and bar charts (activity volume by user type).</li>
+</ul>
+</li>
+<li>
+<p><strong>Traffic Acquisition &amp; User Flow</strong>:</p>
+<ul>
+<li><strong>Acquisition Pie Chart</strong>: Breaks down traffic by source (Direct, Search, Social), prioritizing UTM parameters and User-Agent detection (e.g., WeChat).</li>
+<li><strong>Sankey Diagram</strong>: Maps the user journey from entry to exit, highlighting popular navigation paths and drop-off points.</li>
+</ul>
+</li>
+<li>
+<p><strong>Interactive Filtering</strong>:</p>
+<ul>
+<li>A global time range selector (24 Hours, 7 Days, 30 Days, All Time) allows users to slice data across different temporal dimensions, updating all charts dynamically via AJAX.</li>
+</ul>
+</li>
+</ol>
+<h2>IV. Deployment</h2>
+<p>The system was deployed on a Linux server (<code>110.40.153.38</code>) using the following configuration:</p>
+<ul>
+<li><strong>Analytics Server</strong>: Running on port <strong>5270</strong> using <code>uvicorn</code> with optimized worker processes.</li>
+<li><strong>Target Website</strong>: Running on port <strong>5007</strong>, instrumented with the <code>sdk.js</code> script.</li>
+<li><strong>Process Management</strong>: <code>nohup</code> was used for background process execution, ensuring high availability.</li>
+</ul>
+<p>Access URL: <code>http://110.40.153.38:5270/</code></p>
+<h2>V. Conclusion</h2>
+<p>This project successfully demonstrates the end-to-end development of a web analytics system. By implementing custom tracking logic and visualizing the data, the system provides valuable insights into user behavior without relying on third-party services. The robust architecture ensures scalability, while the detailed attribution logic solves common tracking challenges in the mobile-first ecosystem (e.g., in-app browsers like WeChat). Future work could include adding heatmaps and conversion funnel analysis.</p>
+<h2>VI. References</h2>
+<p>[1] Google Analytics 4 Documentation, "Events and parameters," Google Developers.
+[2] Mozilla Developer Network, "Beacon API," MDN Web Docs.
+[3] FastAPI Documentation, "FastAPI - Modern Python Web Framework."</p>
+</body>
+</html>
