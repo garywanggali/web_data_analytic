@@ -243,7 +243,22 @@ async def get_analytics_stats(db: Session = Depends(get_db)):
         
         # Calculate Average Engagement Time
         engagement_events = [e for e in events if e.event_type == 'user_engagement']
-        total_duration = sum(int(e.data.get('duration_seconds', 0)) for e in engagement_events if e.data)
+        total_duration = 0
+        valid_engagements = 0
+        
+        for e in engagement_events:
+            if e.data:
+                duration = int(e.data.get('duration_seconds', 0))
+                # Filter outliers: cap at 30 minutes (1800s) per session to avoid skewing data
+                # Or ignore extremely long durations that might be bugs or idle tabs
+                if duration > 0 and duration < 86400: # Simple sanity check (less than 24h)
+                    if duration > 1800: 
+                        duration = 1800 # Cap at 30 mins
+                    total_duration += duration
+                    valid_engagements += 1
+                    
+        # Use valid_engagements count or total_sessions for average
+        # Using total_sessions gives "Time per Session"
         avg_engagement_time = round(total_duration / total_sessions, 1) if total_sessions > 0 else 0
         
         # 3. Top Sources (Acquisition)
