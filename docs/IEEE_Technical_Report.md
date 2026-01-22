@@ -46,8 +46,10 @@ graph LR
 
 The tracking logic is encapsulated in `sdk.js`. Key implementation details include:
 
-1.  **Session Management**:
-    The SDK generates a unique `visitor_id` (stored in `localStorage`) and `session_id` (stored in `sessionStorage`). A session expires after 30 minutes of inactivity, compliant with standard analytics definitions.
+1.  **Session Management & User Identification**:
+    *   **User (Visitor)**: Represents a unique individual or device. Identified by a persistent UUID (`visitor_id`) stored in `localStorage`. This ID remains constant across multiple visits unless the browser cache is cleared.
+    *   **Session**: Represents a single continuous period of user activity. Identified by a temporary UUID (`session_id`) stored in `sessionStorage`. A session expires after 30 minutes of inactivity.
+    *   **Relationship**: One User can generate multiple Sessions over time (e.g., visiting in the morning and again at night counts as 1 User but 2 Sessions).
 
 2.  **Event Types**:
     *   **Page View**: Triggered on page load. Captures URL, title, and performance metrics (load time).
