@@ -309,8 +309,12 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
         # 5. Device Breakdown
         devices = defaultdict(int)
         # 6. User Type (New vs Returning based on session count in period)
-        user_types = {"New Visitors": 0, "Returning Visitors": 0}
+        # We track both User Count and Page View Count
+        user_type_counts = {"New Visitors": 0, "Returning Visitors": 0}
+        user_type_pvs = {"New Visitors": 0, "Returning Visitors": 0}
+        
         visitor_sessions = defaultdict(set)
+        visitor_pvs = defaultdict(int)
 
         for e in events:
             if e.event_type == 'pageview':
@@ -324,13 +328,17 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
                 
                 # User Type Prep
                 visitor_sessions[e.visitor_id].add(e.session_id)
+                visitor_pvs[e.visitor_id] += 1
         
-        # Calculate User Types
+        # Calculate User Types & Attribution
         for vid, sessions in visitor_sessions.items():
+            pvs = visitor_pvs[vid]
             if len(sessions) > 1:
-                user_types["Returning Visitors"] += 1
+                user_type_counts["Returning Visitors"] += 1
+                user_type_pvs["Returning Visitors"] += pvs
             else:
-                user_types["New Visitors"] += 1
+                user_type_counts["New Visitors"] += 1
+                user_type_pvs["New Visitors"] += pvs
         
         return {
             "users": total_users,
@@ -340,7 +348,8 @@ async def get_analytics_stats(range: str = "24h", db: Session = Depends(get_db))
             "top_sources": [{"name": k, "value": v} for k, v in top_sources],
             "top_pages": [{"name": k, "value": v} for k, v in top_pages],
             "devices": [{"name": k, "value": v} for k, v in devices.items()],
-            "user_types": [{"name": k, "value": v} for k, v in user_types.items()]
+            "user_types": [{"name": k, "value": v} for k, v in user_type_counts.items()],
+            "user_type_pvs": [{"name": k, "value": v} for k, v in user_type_pvs.items()]
         }
     except Exception as e:
         import traceback
@@ -382,7 +391,7 @@ async def root(db: Session = Depends(get_db)):
                 .metric-value {{ font-size: 32px; font-weight: bold; color: #007bff; margin-bottom: 5px; }}
                 .metric-label {{ color: #6c757d; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }}
                 
-                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
+                .charts-grid {{ display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 20px; margin-bottom: 30px; }}
                 .chart-container {{ height: 350px; border: 1px solid #eee; border-radius: 8px; padding: 10px; }}
                 #sankey-chart {{ width: 100%; height: 500px; margin-bottom: 30px; border: 1px solid #eee; }}
                 
@@ -434,6 +443,7 @@ async def root(db: Session = Depends(get_db)):
                     <div id="source-chart" class="chart-container"></div>
                     <div id="device-chart" class="chart-container"></div>
                     <div id="user-type-chart" class="chart-container"></div>
+                    <div id="user-pv-chart" class="chart-container"></div>
                 </div>
                 
                 <h3>User Flow</h3>
@@ -467,6 +477,7 @@ async def root(db: Session = Depends(get_db)):
                 var sourceChart = echarts.init(document.getElementById('source-chart'));
                 var deviceChart = echarts.init(document.getElementById('device-chart'));
                 var userTypeChart = echarts.init(document.getElementById('user-type-chart'));
+                var userPvChart = echarts.init(document.getElementById('user-pv-chart'));
                 var pagesChart = echarts.init(document.getElementById('pages-chart'));
                 
                 function loadData() {{
@@ -526,6 +537,21 @@ async def root(db: Session = Depends(get_db)):
                                 }}]
                             }});
                             
+                            // User Type PV Bar
+                            userPvChart.setOption({{
+                                title: {{ text: 'Page Views by User Type', left: 'center' }},
+                                tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'shadow' }} }},
+                                grid: {{ left: '3%', right: '4%', bottom: '3%', containLabel: true }},
+                                xAxis: {{ type: 'category', data: data.user_type_pvs.map(i => i.name) }},
+                                yAxis: {{ type: 'value' }},
+                                series: [{{
+                                    name: 'Page Views',
+                                    type: 'bar',
+                                    data: data.user_type_pvs.map(i => i.value),
+                                    itemStyle: {{ color: '#5470c6' }}
+                                }}]
+                            }});
+                            
                             // Pages Bar
                             pagesChart.setOption({{
                                 title: {{ text: 'Top Pages', left: 'center' }},
@@ -574,6 +600,7 @@ async def root(db: Session = Depends(get_db)):
                     sourceChart.resize();
                     deviceChart.resize();
                     userTypeChart.resize();
+                    userPvChart.resize();
                     pagesChart.resize();
                 }});
 
