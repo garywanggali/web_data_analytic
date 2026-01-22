@@ -400,17 +400,18 @@ async def get_analytics_stats(time_range: str = "24h", db: Session = Depends(get
         # Generate last 30 minute buckets
         for i in range(30):
             # Time window for this bucket: [t_end-1min, t_end]
-            # Actually, standard "Real-time" charts often show "Events per minute" or "Active Users in that minute"
-            bucket_time = now - timedelta(minutes=(29-i))
-            bucket_str = bucket_time.strftime("%H:%M")
+            # Convert to UTC+8 (China Standard Time) for display
+            bucket_time_utc = now - timedelta(minutes=(29-i))
+            bucket_time_cst = bucket_time_utc + timedelta(hours=8)
+            bucket_str = bucket_time_cst.strftime("%H:%M")
             rt_labels.append(bucket_str)
             
-            # Count unique users active in this specific minute
-            # Strict minute matching:
+            # Count unique users active in this specific minute (using UTC time for filtering)
             minute_users = set()
+            bucket_utc_str = bucket_time_utc.strftime("%H:%M")
             for e in rt_events:
                 # Check if event falls in this minute
-                if e.timestamp.strftime("%H:%M") == bucket_str:
+                if e.timestamp.strftime("%H:%M") == bucket_utc_str:
                     minute_users.add(e.visitor_id)
             rt_trend_data.append(len(minute_users))
         
