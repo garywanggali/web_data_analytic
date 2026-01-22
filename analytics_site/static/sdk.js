@@ -41,7 +41,7 @@
     
     // For production deployment on 110.40.153.38
     // We point to the analytics server running on port 5270 on the same host
-    const ENDPOINT = 'http://110.40.153.38:5270/api/track'; 
+    const ENDPOINT = 'http://110.40.153.38:5270/api/collect'; 
     // WARNING: This still points to localhost. If the website is on 110.40..., users visiting it 
     // won't be able to send data to your localhost unless you use a tunnel.
     

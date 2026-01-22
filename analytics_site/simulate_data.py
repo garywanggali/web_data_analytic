@@ -5,12 +5,13 @@ import time
 from datetime import datetime, timedelta
 
 # Configuration
-ANALYTICS_ENDPOINT = "http://localhost:8001/api/track"
-BASE_URL = "http://110.40.153.38:5007"
+# Point to the REMOTE production analytics server
+ANALYTICS_ENDPOINT = "http://110.40.153.38:5270/api/collect"
+BASE_URL = "http://110.40.153.38:8802"
 
 # Simulation Parameters
-NUM_USERS = 20
-EVENTS_PER_USER = 10
+NUM_USERS = 50  # Increase user count for better chart density
+EVENTS_PER_USER = 8
 
 # Helper Lists
 URL_PATHS = [
@@ -19,22 +20,28 @@ URL_PATHS = [
     "/rankings/",
     "/register/",
     "/login/",
+    "/admin/",
 ]
 # Generate some realistic course URLs (assuming IDs 1-10 exist)
 URL_PATHS.extend([f"/course/{i}/" for i in range(1, 11)])
 
 REFERRERS = [
     "https://www.google.com/",
+    "https://www.google.com/",
     "https://www.bing.com/",
     "https://twitter.com/",
-    "http://110.40.153.38:5007/",
-    None
+    "https://www.dingtalk.com/", # Mock DingTalk
+    "https://www.dingtalk.com/",
+    "https://mp.weixin.qq.com/", # Mock WeChat
+    "http://110.40.153.38:8802/", # Internal
+    None # Direct
 ]
 
 USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
     "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+    "DingTalk/7.0.0 (iPhone; iOS 16.0; Scale/3.00)", # Mock DingTalk UA
 ]
 
 def generate_session_data():

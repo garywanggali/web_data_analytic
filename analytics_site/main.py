@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/api/track", response_model=EventResponse)
+@app.post("/api/collect", response_model=EventResponse)
 async def track_event(
     payload: EventPayload, 
     request: Request, 
